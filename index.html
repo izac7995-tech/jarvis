@@ -1255,7 +1255,24 @@ async function speakElevenLabs(text, key, msgEl) {
   source.start(0);
 }
 
-function speakBrowser(text, msgEl) {
+async function speakBrowser(text, msgEl) {
+  // Try edge-tts local server first (localhost only) — Microsoft neural voice, free, unlimited
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    try {
+      const url = `http://localhost:7474/tts?text=${encodeURIComponent(text.slice(0,500))}&voice=en-GB-RyanNeural`;
+      const audio = new Audio(url);
+      voice.speaking = true; voice._audio = audio;
+      startVoiceWave(); window._globeSpeaking && window._globeSpeaking(true);
+      audio.onended = audio.onerror = () => {
+        voice.speaking = false; voice._audio = null; stopVoiceWave();
+        if (voice.currentMsgEl) { voice.currentMsgEl.classList.remove('speaking'); voice.currentMsgEl = null; }
+        window._globeSpeaking && window._globeSpeaking(false);
+      };
+      await audio.play();
+      return;
+    } catch(e) { /* fall through to Web Speech */ }
+  }
+  // Fallback: Web Speech API (GitHub Pages / no local server)
   if (!window.speechSynthesis) return;
   const vs = speechSynthesis.getVoices();
   const u = new SpeechSynthesisUtterance(text);
