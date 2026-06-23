@@ -1253,8 +1253,8 @@ function speakBrowser(text, msgEl) {
   if (!window.speechSynthesis) return;
 
   const go = () => {
-    const u = new SpeechSynthesisUtterance(text);
     const vs = speechSynthesis.getVoices();
+    const u = new SpeechSynthesisUtterance(text);
     const pref = vs.find(v => /ryan|george|daniel|google uk english male|arthur|alex|fred/i.test(v.name))
       || vs.find(v => /en[-_](ie|gb|us)/i.test(v.lang)) || vs[0];
     if (pref) u.voice = pref;
@@ -1265,15 +1265,17 @@ function speakBrowser(text, msgEl) {
       if (voice.currentMsgEl) { voice.currentMsgEl.classList.remove('speaking'); voice.currentMsgEl = null; }
       window._globeSpeaking && window._globeSpeaking(false);
     };
-    // Chrome: resume in case synthesis was auto-paused, cancel stale, then speak
+    // resume only — never cancel mid-session as it re-locks Chrome's audio context
     speechSynthesis.resume();
-    speechSynthesis.cancel();
-    setTimeout(() => { speechSynthesis.resume(); speechSynthesis.speak(u); }, 80);
+    speechSynthesis.speak(u);
   };
 
   const vs = speechSynthesis.getVoices();
-  if (!vs.length) { speechSynthesis.onvoiceschanged = go; }
-  else go();
+  if (!vs.length) {
+    speechSynthesis.onvoiceschanged = () => { speechSynthesis.onvoiceschanged = null; go(); };
+  } else {
+    go();
+  }
 }
 
 function stopSpeech() {
@@ -1345,13 +1347,11 @@ function updateMicUI(on) {
 function toggleListen() {
   if (voice.speaking) { stopSpeech(); return; }
   if (!mic.recognition) {
-    const greetings = [
-      'Good day, Sir Izac. All systems nominal. Ready for your command.',
-      'JARVIS online. What do you need, Sir Izac?',
-      'Standing by, Master Izac. How may I assist?'
-    ];
-    speakText(greetings[Math.floor(Math.random() * greetings.length)], null);
-    return;
+    initMic();
+    if (!mic.recognition) {
+      document.getElementById('sb-voice-status').textContent = 'Mic not supported';
+      return;
+    }
   }
   if (mic.listening) {
     mic.recognition.stop();
@@ -1360,7 +1360,13 @@ function toggleListen() {
   mic.targetInput = document.getElementById('chat-overlay').classList.contains('open')
     ? document.getElementById('co-input')
     : null;
-  try { mic.recognition.start(); } catch (e) { console.warn(e); }
+  try {
+    mic.recognition.start();
+  } catch (e) {
+    // recognition already started — stop and restart
+    try { mic.recognition.stop(); } catch {}
+    setTimeout(() => { try { mic.recognition.start(); } catch(e2) { console.warn('Mic error:', e2); } }, 300);
+  }
 }
 
 function toggleChatMic() {
