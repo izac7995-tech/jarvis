@@ -953,7 +953,7 @@ const DIVISIONS = [
 // ── PROVIDERS ─────────────────────────────────────────────────────
 
 const PROVIDERS = {
-  ollama:{name:'Ollama',baseUrl:'http://localhost:11434/v1',defaultModel:'llama3.2',needsKey:false},
+  ollama:{name:'Ollama',baseUrl:(location.hostname==='localhost'||location.hostname==='127.0.0.1'?'http://localhost:7474/ollama/v1':'http://localhost:11434/v1'),defaultModel:'llama3.2',needsKey:false},
   groq:{name:'Groq',baseUrl:'https://api.groq.com/openai/v1',defaultModel:'llama-3.3-70b-versatile',needsKey:true},
   openrouter:{name:'OpenRouter',baseUrl:'https://openrouter.ai/api/v1',defaultModel:'meta-llama/llama-3.1-8b-instruct:free',needsKey:true},
   anthropic:{name:'Anthropic',baseUrl:null,defaultModel:'claude-opus-4-8',needsKey:true},
