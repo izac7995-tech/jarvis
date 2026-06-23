@@ -965,7 +965,7 @@ const S = {
   division:'nexus',
   messages:{},
   streaming:false,
-  provider:localStorage.getItem('j_provider')||'ollama',
+  provider:(()=>{const p=localStorage.getItem('j_provider');if(!p||p==='groq'||p==='openrouter'){localStorage.setItem('j_provider','ollama');return'ollama';}return p;})(),
   apiKey:localStorage.getItem('j_key')||'',
   activeFile:null,
   chatOpen:false,
