@@ -1626,6 +1626,11 @@ const JARVIS_TOOLS=[
   name:'find_businesses',
   description:'Find local businesses in a category and location. Returns two lists: businesses WITHOUT a website (hot leads) and businesses with websites. Use when Sir Izac wants to prospect for clients, find competitors, or identify businesses that need web services.',
   input_schema:{type:'object',properties:{query:{type:'string',description:'Business type, e.g. "mechanic", "plumber", "restaurant"'},location:{type:'string',description:'City or area, e.g. "Dublin", "Cork Ireland"'}},required:['query','location']}
+},
+{
+  name:'diagnose_tools',
+  description:'Run a full health check across all JARVIS tools and systems — web search, business finder, TTS voice, Ollama. Use when Sir Izac asks to diagnose, check tools, health check, or if something seems broken.',
+  input_schema:{type:'object',properties:{},required:[]}
 }
 ];
 
@@ -1657,9 +1662,19 @@ async function runFindBusinesses(query, location){
   }catch(e){return`Business finder unavailable (local server offline): ${e.message}`;}
 }
 
+async function runDiagnose(){
+  try{
+    const r=await fetch('http://localhost:7474/diagnose');
+    if(!r.ok)return`Diagnostics endpoint error: ${r.status}`;
+    const d=await r.json();
+    return d.report||'No report returned.';
+  }catch(e){return`Diagnostics unavailable — local server offline.\n\nStart JARVIS via localhost:7474 to enable health checks.`;}
+}
+
 async function executeTool(name, input){
   if(name==='web_search') return runWebSearch(input.query);
   if(name==='find_businesses') return runFindBusinesses(input.query, input.location||'');
+  if(name==='diagnose_tools') return runDiagnose();
   return`Unknown tool: ${name}`;
 }
 
