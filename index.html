@@ -45,8 +45,8 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .topbar{
   position:fixed;top:0;left:var(--sidebar);right:0;height:var(--topbar);
   background:rgba(3,8,16,0.92);border-bottom:1px solid var(--border2);
-  display:flex;align-items:center;padding:0 20px;gap:16px;
-  z-index:100;backdrop-filter:blur(20px);
+  display:flex;align-items:center;padding:0 16px;gap:12px;
+  z-index:100;backdrop-filter:blur(20px);overflow:hidden;
 }
 .sys-status{display:flex;align-items:center;gap:8px;padding:5px 14px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:4px}
 .sys-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease-in-out infinite}
@@ -55,11 +55,12 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .tb-clock{flex:1;text-align:center}
 .tb-date{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.1em;margin-bottom:1px}
 .tb-time{font-size:22px;font-family:var(--mono);font-weight:600;color:var(--cyan2);letter-spacing:0.08em;line-height:1}
-.tb-search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 12px;width:200px}
+.tb-search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 12px;width:150px;flex-shrink:1}
 .tb-search input{background:none;border:none;outline:none;color:var(--text);font-size:12px;font-family:var(--font);width:100%}
 .tb-search input::placeholder{color:var(--text3)}
 .tb-search svg{width:13px;height:13px;stroke:var(--text3);fill:none;stroke-width:1.5;flex-shrink:0}
-.tb-right{display:flex;align-items:center;gap:10px}
+.tb-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.tb-clock{flex-shrink:0}
 .tb-icon-btn{width:32px;height:32px;background:var(--surface);border:1px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .tb-icon-btn svg{width:14px;height:14px;stroke:var(--text2);fill:none;stroke-width:1.5}
 .tb-user{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;background:var(--surface);border:1px solid var(--border2);border-radius:20px;cursor:pointer}
@@ -432,7 +433,7 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
         <option value="anthropic">Anthropic</option>
       </select>
       <input class="key-inp" id="api-key-input" type="password" placeholder="API key" oninput="saveKey()">
-      <input class="key-inp" id="el-key-input" type="password" placeholder="ElevenLabs key (optional)" oninput="saveElKey()" style="width:180px">
+      <input class="key-inp" id="el-key-input" type="password" placeholder="ElevenLabs (optional)" oninput="saveElKey()" style="width:150px;display:none">
     </div>
     <div class="tb-icon-btn"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
     <div class="tb-user">
@@ -1255,20 +1256,25 @@ async function speakElevenLabs(text, key, msgEl) {
 }
 
 function speakBrowser(text, msgEl) {
-  if (!window.responsiveVoice) return;
+  // StreamElements TTS — free, no key, plays via Audio() so no browser autoplay issues
+  const encoded = encodeURIComponent(text.slice(0, 300));
+  const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encoded}`;
+  const audio = new Audio(url);
   voice.speaking = true;
+  voice._audio = audio;
   startVoiceWave();
   window._globeSpeaking && window._globeSpeaking(true);
-  responsiveVoice.speak(text, 'UK English Male', {
-    rate: 0.9,
-    pitch: 0.8,
-    volume: 1,
-    onend: () => {
-      voice.speaking = false;
-      stopVoiceWave();
-      if (voice.currentMsgEl) { voice.currentMsgEl.classList.remove('speaking'); voice.currentMsgEl = null; }
-      window._globeSpeaking && window._globeSpeaking(false);
-    }
+  audio.onended = audio.onerror = () => {
+    voice.speaking = false;
+    voice._audio = null;
+    stopVoiceWave();
+    if (voice.currentMsgEl) { voice.currentMsgEl.classList.remove('speaking'); voice.currentMsgEl = null; }
+    window._globeSpeaking && window._globeSpeaking(false);
+  };
+  audio.play().catch(e => {
+    console.warn('TTS play failed:', e);
+    voice.speaking = false;
+    stopVoiceWave();
   });
 }
 
@@ -1277,9 +1283,10 @@ function testVoice() {
 }
 
 function stopSpeech() {
-  window.speechSynthesis?.cancel();
+  if (voice._audio) { try { voice._audio.pause(); } catch {} voice._audio = null; }
   if (voice.audioSource) { try { voice.audioSource.stop(); } catch {} voice.audioSource = null; }
   if (voice.audioCtx) { try { voice.audioCtx.close(); } catch {} voice.audioCtx = null; }
+  window.speechSynthesis?.cancel();
   voice.speaking = false;
   stopVoiceWave();
   if (voice.currentMsgEl) { voice.currentMsgEl.classList.remove('speaking'); voice.currentMsgEl = null; }
