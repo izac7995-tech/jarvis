@@ -845,6 +845,7 @@ body{background:var(--void) url("data:image/svg+xml,%3Csvg width='60' height='60
   <div class="co-header">
     <button class="co-back" onclick="closeChat()">← Dashboard</button>
     <div class="co-title" id="co-title">JARVIS NEXUS</div>
+    <button class="co-back" onclick="if(confirm('Clear this conversation?'))clearHistory()" style="margin-left:auto;font-size:9px;opacity:0.5" title="Clear history">✕ Clear</button>
     <div class="co-division-tabs" id="co-tabs"></div>
   </div>
   <div class="co-msgs" id="co-msgs"></div>
@@ -972,7 +973,32 @@ const S = {
   previewOpen:false,
   sessions:parseInt(localStorage.getItem('j_sessions')||'0'),
 };
-DIVISIONS.forEach(d=>{ S.messages[d.id]=[]; });
+// ── CONVERSATION PERSISTENCE ─────────────────────────────────────
+(function loadMessages(){
+  DIVISIONS.forEach(d=>{
+    try{
+      const saved=localStorage.getItem(`j_msgs_${d.id}`);
+      S.messages[d.id]=saved?JSON.parse(saved).map(m=>({...m,streaming:false})):[];
+    }catch{S.messages[d.id]=[];}
+  });
+})();
+
+function saveMessages(divId){
+  try{
+    // Keep last 100 messages per division, strip file blobs to save space
+    const msgs=S.messages[divId].slice(-100).map(m=>{
+      const {file,...rest}=m;
+      return rest;
+    });
+    localStorage.setItem(`j_msgs_${divId}`,JSON.stringify(msgs));
+  }catch(e){console.warn('Failed to save messages:',e);}
+}
+
+function clearHistory(divId){
+  S.messages[divId||S.division]=[];
+  localStorage.removeItem(`j_msgs_${divId||S.division}`);
+  renderChatMessages();
+}
 
 // ── CLOCK ─────────────────────────────────────────────────────────
 
@@ -1590,11 +1616,18 @@ function toggleChatMic() {
 
 // ── AI STREAMING ─────────────────────────────────────────────────
 
-const JARVIS_TOOLS=[{
+const JARVIS_TOOLS=[
+{
   name:'web_search',
   description:'Search the web for current information, news, prices, or anything that needs live data. Use this whenever the question benefits from real-world facts.',
   input_schema:{type:'object',properties:{query:{type:'string',description:'The search query'}},required:['query']}
-}];
+},
+{
+  name:'find_businesses',
+  description:'Find local businesses in a category and location. Returns two lists: businesses WITHOUT a website (hot leads) and businesses with websites. Use when Sir Izac wants to prospect for clients, find competitors, or identify businesses that need web services.',
+  input_schema:{type:'object',properties:{query:{type:'string',description:'Business type, e.g. "mechanic", "plumber", "restaurant"'},location:{type:'string',description:'City or area, e.g. "Dublin", "Cork Ireland"'}},required:['query','location']}
+}
+];
 
 async function runWebSearch(query){
   try{
@@ -1603,6 +1636,31 @@ async function runWebSearch(query){
     const d=await r.json();
     return d.results.map((r,i)=>`${i+1}. ${r.title}\n${r.body}\nSource: ${r.url}`).join('\n\n');
   }catch(e){return`Search unavailable (local server offline): ${e.message}`;}
+}
+
+async function runFindBusinesses(query, location){
+  try{
+    const r=await fetch(`http://localhost:7474/businesses?q=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`);
+    if(!r.ok)return`Business search failed: ${r.status}`;
+    const d=await r.json();
+    const fmt=(b)=>`• ${b.name}${b.phone?' | '+b.phone:''}${b.address?' | '+b.address:''}${b.category?' | '+b.category:''}${b.rating?' | ★'+b.rating+(b.reviews?' ('+b.reviews+' reviews)':''):''}`;
+    let out=`Found ${d.total} businesses for "${d.query}"\n\n`;
+    if(d.no_website.length){
+      out+=`🎯 NO WEBSITE (${d.no_website.length} leads):\n${d.no_website.map(fmt).join('\n')}\n\n`;
+    }else{
+      out+=`No businesses found without a website.\n\n`;
+    }
+    if(d.has_website.length){
+      out+=`✓ HAS WEBSITE (${d.has_website.length}):\n${d.has_website.slice(0,5).map(fmt).join('\n')}`;
+    }
+    return out;
+  }catch(e){return`Business finder unavailable (local server offline): ${e.message}`;}
+}
+
+async function executeTool(name, input){
+  if(name==='web_search') return runWebSearch(input.query);
+  if(name==='find_businesses') return runFindBusinesses(input.query, input.location||'');
+  return`Unknown tool: ${name}`;
 }
 
 async function* streamAI(messages,sysPrompt,signal){
@@ -1653,8 +1711,11 @@ async function* streamAI(messages,sysPrompt,signal){
       msgs=[...msgs,{role:'assistant',content:assistantContent}];
       const toolResults=[];
       for(const tu of toolUses){
-        yield`\n\n🔍 *Searching: ${tu.input.query}*\n\n`;
-        const result=await runWebSearch(tu.input.query);
+        const label=tu.name==='find_businesses'
+          ?`🎯 *Finding ${tu.input.query} in ${tu.input.location}...*`
+          :`🔍 *Searching: ${tu.input.query}*`;
+        yield`\n\n${label}\n\n`;
+        const result=await executeTool(tu.name,tu.input);
         toolResults.push({type:'tool_result',tool_use_id:tu.id,content:result});
       }
       msgs=[...msgs,{role:'user',content:toolResults}];
@@ -1796,7 +1857,7 @@ async function sendMessage(text){
   const money=['transfer','send to wallet','buy bitcoin','my bank account','my credit card','stripe','pay from my'];
   if(money.some(k=>msg.toLowerCase().includes(k))){
     S.messages[S.division].push({role:'assistant',content:'🔒 **Wealth Guard** — I don\'t handle financial transactions, wallet operations, or payment accounts. That\'s yours alone, Izac.',time:Date.now()});
-    renderChatMessages();return;
+    saveMessages(S.division);renderChatMessages();return;
   }
   // Bank speech permission synchronously from this user gesture so async TTS works
   if(window.speechSynthesis){
@@ -1807,6 +1868,7 @@ async function sendMessage(text){
   input.value='';autoResize(input);
   S.streaming=true;setSend(false);
   S.messages[S.division].push({role:'user',content:msg,time:Date.now()});
+  saveMessages(S.division);
 
   const div=DIVISIONS.find(d=>d.id===S.division);
   if(S.division==='webforge'){
@@ -1837,6 +1899,7 @@ async function runSingle(msg,div){
   // HTML output check
   const htmlMatch=full.match(/<!DOCTYPE\s+html[\s\S]*/i);
   if(htmlMatch){S.messages[div.id][idx].file={name:'jarvis-output.html',content:htmlMatch[0]};S.activeFile=S.messages[div.id][idx].file;}
+  saveMessages(div.id);
   renderChatMessages();
   const el=document.querySelector(`[data-idx="${idx}"]`);
   speakText(full,el);
