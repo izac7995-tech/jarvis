@@ -1256,26 +1256,21 @@ async function speakElevenLabs(text, key, msgEl) {
 }
 
 function speakBrowser(text, msgEl) {
-  // StreamElements TTS — free, no key, plays via Audio() so no browser autoplay issues
-  const encoded = encodeURIComponent(text.slice(0, 300));
-  const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encoded}`;
-  const audio = new Audio(url);
-  voice.speaking = true;
-  voice._audio = audio;
-  startVoiceWave();
-  window._globeSpeaking && window._globeSpeaking(true);
-  audio.onended = audio.onerror = () => {
-    voice.speaking = false;
-    voice._audio = null;
-    stopVoiceWave();
+  if (!window.speechSynthesis) return;
+  const vs = speechSynthesis.getVoices();
+  const u = new SpeechSynthesisUtterance(text);
+  const pref = vs.find(v => /ryan|george|daniel|google uk english male/i.test(v.name))
+    || vs.find(v => /en[-_](ie|gb|us)/i.test(v.lang)) || vs[0];
+  if (pref) u.voice = pref;
+  u.rate = 0.9; u.pitch = 0.82; u.volume = 1;
+  u.onstart = () => { voice.speaking = true; startVoiceWave(); window._globeSpeaking && window._globeSpeaking(true); };
+  u.onend = u.onerror = () => {
+    voice.speaking = false; stopVoiceWave();
     if (voice.currentMsgEl) { voice.currentMsgEl.classList.remove('speaking'); voice.currentMsgEl = null; }
     window._globeSpeaking && window._globeSpeaking(false);
   };
-  audio.play().catch(e => {
-    console.warn('TTS play failed:', e);
-    voice.speaking = false;
-    stopVoiceWave();
-  });
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
 }
 
 function makeBeepWav() {
