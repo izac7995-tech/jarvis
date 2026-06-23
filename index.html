@@ -1279,7 +1279,40 @@ function speakBrowser(text, msgEl) {
 }
 
 function testVoice() {
-  speakBrowser('JARVIS online. Voice systems operational. Standing by, Izac.', null);
+  const log = (msg, col) => {
+    let el = document.getElementById('voice-debug');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'voice-debug';
+      el.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:9999;background:#0a1628;border:1px solid #06b6d4;border-radius:8px;padding:14px 20px;font-family:monospace;font-size:12px;min-width:380px;max-width:600px';
+      document.body.appendChild(el);
+    }
+    el.innerHTML += `<div style="color:${col||'#e2e8f0'};margin:2px 0">${msg}</div>`;
+  };
+
+  const el = document.getElementById('voice-debug');
+  if (el) el.innerHTML = '';
+
+  log('▶ Testing audio…', '#06b6d4');
+
+  // Test 1: known working MP3
+  const test1 = new Audio('https://www.soundjay.com/buttons/sounds/button-09a.mp3');
+  test1.oncanplaythrough = () => log('✓ Audio element can load external MP3', '#22c55e');
+  test1.onerror = (e) => log('✗ Audio load error: ' + (e.message || test1.error?.message || 'unknown'), '#ef4444');
+  test1.load();
+
+  // Test 2: StreamElements TTS
+  const encoded = encodeURIComponent('JARVIS online. Standing by, Izac.');
+  const ttsUrl = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encoded}`;
+  log('▶ Calling StreamElements TTS…', '#f59e0b');
+  const tts = new Audio(ttsUrl);
+  tts.oncanplaythrough = () => log('✓ TTS audio loaded — attempting play', '#22c55e');
+  tts.onerror = () => log('✗ TTS fetch failed — API may be down or blocked', '#ef4444');
+  tts.play()
+    .then(() => { log('✓ play() succeeded — you should hear audio now', '#22c55e'); startVoiceWave(); window._globeSpeaking && window._globeSpeaking(true); })
+    .catch(e => log('✗ play() rejected: ' + e.name + ' — ' + e.message, '#ef4444'));
+
+  setTimeout(() => { document.getElementById('voice-debug')?.remove(); }, 12000);
 }
 
 function stopSpeech() {
