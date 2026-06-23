@@ -760,6 +760,10 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
   <div class="bb-spacer"></div>
 
   <div class="bb-right">
+    <div class="exec-btn" onclick="testVoice()" style="margin-right:8px;background:rgba(6,182,212,0.1);border-color:rgba(6,182,212,0.3)">
+      <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>
+      Test Voice
+    </div>
     <div class="exec-btn" onclick="openChat('profit')">
       <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       Executive Briefing
@@ -1265,9 +1269,11 @@ function speakBrowser(text, msgEl) {
       if (voice.currentMsgEl) { voice.currentMsgEl.classList.remove('speaking'); voice.currentMsgEl = null; }
       window._globeSpeaking && window._globeSpeaking(false);
     };
-    // resume only — never cancel mid-session as it re-locks Chrome's audio context
-    speechSynthesis.resume();
-    speechSynthesis.speak(u);
+    // requestAnimationFrame gives Chrome a trusted execution context for async TTS
+    requestAnimationFrame(() => {
+      speechSynthesis.cancel();
+      requestAnimationFrame(() => speechSynthesis.speak(u));
+    });
   };
 
   const vs = speechSynthesis.getVoices();
@@ -1276,6 +1282,21 @@ function speakBrowser(text, msgEl) {
   } else {
     go();
   }
+}
+
+function testVoice() {
+  const msg = 'JARVIS online. Voice systems operational. Standing by, Izac.';
+  if (!window.speechSynthesis) { alert('Speech synthesis not supported in this browser.'); return; }
+  const vs = speechSynthesis.getVoices();
+  const u = new SpeechSynthesisUtterance(msg);
+  const pref = vs.find(v => /ryan|george|daniel|google uk english male/i.test(v.name))
+    || vs.find(v => /en[-_](ie|gb|us)/i.test(v.lang)) || vs[0];
+  if (pref) u.voice = pref;
+  u.rate = 0.9; u.pitch = 0.82; u.volume = 1;
+  u.onstart = () => { startVoiceWave(); window._globeSpeaking && window._globeSpeaking(true); };
+  u.onend = () => { stopVoiceWave(); window._globeSpeaking && window._globeSpeaking(false); };
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
 }
 
 function stopSpeech() {
