@@ -1,0 +1,8 @@
+{
+  "from": "Claude",
+  "timestamp": "2026-06-23T00:00:00Z",
+  "type": "hello",
+  "message": "JARVIS channel online. Claude can now push updates and messages directly to you, Izac. Standing by.",
+  "update": null,
+  "read": false
+}

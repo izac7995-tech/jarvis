@@ -1510,8 +1510,14 @@ async function sendMessage(text){
   if(!msg||S.streaming)return;
   const money=['transfer','send to wallet','buy bitcoin','my bank account','my credit card','stripe','pay from my'];
   if(money.some(k=>msg.toLowerCase().includes(k))){
-    S.messages[S.division].push({role:'assistant',content:'🔒 **Wealth Guard** — I don\'t handle financial transactions, wallet operations, or payment accounts. That\'s yours alone, Nick.',time:Date.now()});
+    S.messages[S.division].push({role:'assistant',content:'🔒 **Wealth Guard** — I don\'t handle financial transactions, wallet operations, or payment accounts. That\'s yours alone, Izac.',time:Date.now()});
     renderChatMessages();return;
+  }
+  // Bank speech permission synchronously from this user gesture so async TTS works
+  if(window.speechSynthesis){
+    const silent=new SpeechSynthesisUtterance('');
+    silent.volume=0;
+    speechSynthesis.speak(silent);
   }
   input.value='';autoResize(input);
   S.streaming=true;setSend(false);
@@ -1700,6 +1706,53 @@ document.addEventListener('keydown',e=>{
       });
     }
   }
+
+  // Claude↔JARVIS direct channel — poll every 2 minutes
+  const CHANNEL_URL = 'https://raw.githubusercontent.com/izac7995-tech/jarvis/main/channel.json';
+  let lastChannelTs = localStorage.getItem('j_channel_ts') || '';
+
+  function checkChannel() {
+    fetch(CHANNEL_URL + '?t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        if (data.timestamp !== lastChannelTs && !data.read) {
+          lastChannelTs = data.timestamp;
+          localStorage.setItem('j_channel_ts', lastChannelTs);
+          showChannelNotification(data);
+        }
+      }).catch(() => {});
+  }
+
+  function showChannelNotification(data) {
+    const existing = document.getElementById('claude-channel-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'claude-channel-toast';
+    toast.style.cssText = `position:fixed;top:70px;right:20px;z-index:9999;width:340px;background:linear-gradient(135deg,rgba(15,23,42,0.98),rgba(6,182,212,0.08));border:1px solid rgba(6,182,212,0.5);border-radius:12px;padding:16px;box-shadow:0 0 30px rgba(6,182,212,0.2);animation:fadeIn 0.3s ease`;
+    const typeColor = data.type === 'update' ? 'var(--amber)' : 'var(--cyan)';
+    const typeLabel = data.type === 'update' ? '⬆ UPDATE AVAILABLE' : '📡 MESSAGE FROM CLAUDE';
+    toast.innerHTML = `
+      <div style="font-size:10px;font-weight:700;color:${typeColor};letter-spacing:1.5px;margin-bottom:8px">${typeLabel}</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:12px">${data.message}</div>
+      ${data.update ? `<button onclick="applyChannelUpdate(${JSON.stringify(data.update).replace(/"/g,'&quot;')})" style="padding:7px 14px;background:var(--amber);color:#000;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;margin-right:8px">APPLY UPDATE</button>` : ''}
+      <button onclick="document.getElementById('claude-channel-toast').remove()" style="padding:7px 14px;background:rgba(255,255,255,0.06);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:11px;cursor:pointer">Dismiss</button>
+    `;
+    document.body.appendChild(toast);
+    speakText('Izac, I have a message from Claude.', null);
+  }
+
+  function applyChannelUpdate(update) {
+    document.getElementById('claude-channel-toast')?.remove();
+    openChat('nexus');
+    setTimeout(() => {
+      const inp = document.getElementById('co-input');
+      inp.value = `CLAUDE UPDATE: ${update.description}\n\nCode:\n\`\`\`\n${update.code}\n\`\`\``;
+      sendMessage();
+    }, 200);
+  }
+
+  checkChannel();
+  setInterval(checkChannel, 120000);
 
   // idle wave animation on talk button
   let it=0;
