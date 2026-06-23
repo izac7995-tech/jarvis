@@ -1378,14 +1378,14 @@ function initMic() {
 
   mic.recognition.onresult = (e) => {
     const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
-    const inp = mic.targetInput || document.getElementById('co-input');
+    // Always ensure chat is open so JARVIS can respond
+    if (!document.getElementById('chat-overlay').classList.contains('open')) {
+      openChat('nexus');
+    }
+    const inp = document.getElementById('co-input');
     if (inp) { inp.value = transcript; autoResize(inp); }
     if (e.results[e.results.length - 1].isFinal && transcript.trim()) {
-      setTimeout(() => {
-        if (mic.targetInput === document.getElementById('co-input') && document.getElementById('chat-overlay').classList.contains('open')) {
-          sendMessage();
-        }
-      }, 400);
+      setTimeout(() => sendMessage(), 400);
     }
   };
 
@@ -1423,9 +1423,10 @@ function toggleListen() {
     mic.recognition.stop();
     return;
   }
-  mic.targetInput = document.getElementById('chat-overlay').classList.contains('open')
-    ? document.getElementById('co-input')
-    : null;
+  if (!document.getElementById('chat-overlay').classList.contains('open')) {
+    openChat('nexus');
+  }
+  mic.targetInput = document.getElementById('co-input');
   try {
     mic.recognition.start();
   } catch (e) {
