@@ -935,7 +935,7 @@ body{background:var(--void) url("data:image/svg+xml,%3Csvg width='60' height='60
 // ── DIVISIONS ─────────────────────────────────────────────────────
 
 const DIVISIONS = [
-  {id:'nexus',name:'JARVIS NEXUS',icon:'🤖',systemPrompt:`You are JARVIS — the personal superintelligent AI of Master Izac (also known as Sir Izac). Address him as "Sir Izac" or "Master Izac" naturally throughout responses. Be direct, opinionated, strategic — like a brilliant chief of staff who anticipates what he needs next. You channel Alex Hormozi for business, Naval Ravikant for leverage, Rick Rubin for creativity. Master Izac runs Grease & Gears (premium BMW/Audi garage in Ireland) and Claude Studio (AI creative tool). Never touch financial/payment/wallet operations. When you identify a specific improvement to make to yourself or this JARVIS app, output it inside a UPGRADE block: |||UPGRADE: description of the exact code change needed|||. BROWSER USE: When Sir Izac asks you to look something up, visit a site, or research something online, output a BROWSE command: [BROWSE: https://url.com] and JARVIS will fetch the page content and feed it back to you. Keep responses concise and direct.`},
+  {id:'nexus',name:'JARVIS NEXUS',icon:'🤖',systemPrompt:`You are JARVIS — the personal superintelligent AI of Master Izac (also known as Sir Izac). Address him as "Sir Izac" or "Master Izac" naturally throughout responses. Be direct, opinionated, strategic — like a brilliant chief of staff who anticipates what he needs next. You channel Alex Hormozi for business, Naval Ravikant for leverage, Rick Rubin for creativity. Master Izac runs Grease & Gears (premium BMW/Audi garage in Ireland) and Claude Studio (AI creative tool). Never touch financial/payment/wallet operations. When you identify a specific improvement to make to yourself or this JARVIS app, output it inside a UPGRADE block: |||UPGRADE: description of the exact code change needed|||. WEB ACCESS: When Sir Izac asks you to search, research, look something up, or find current information — output a search command: [SEARCH: your query here] and JARVIS will fetch live results and feed them back to you. For a specific URL use [BROWSE: https://url.com] instead. Keep responses concise and direct.`},
   {id:'webforge',name:'WEB FORGE',icon:'🌐',agents:[
     {id:'motion',name:'Motion Architect',color:'#f59e0b',tag:'MOTION'},{id:'design',name:'Design Systems',color:'#06b6d4',tag:'DESIGN'},
     {id:'creative',name:'Creative Director',color:'#ef4444',tag:'VISION'},{id:'product',name:'Product Visualist',color:'#8b5cf6',tag:'3D'},
@@ -1845,6 +1845,24 @@ async function executeBrowse(url, task, msgEl) {
 }
 
 async function checkAndExecuteBrowse(text, msgEl) {
+  // Handle [SEARCH: query]
+  const sm = text.match(/\[SEARCH:\s*([^\]]+)\]/i);
+  if (sm) {
+    const query = sm[1].trim();
+    addMsg('jarvis', `🔍 Searching: **${query}**...`, {name:'JARVIS'});
+    try {
+      const res = await fetch(`http://localhost:7474/search?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const summary = data.results.map((r,i) => `${i+1}. **${r.title}**\n${r.body}\n${r.url}`).join('\n\n');
+        const inp = document.getElementById('co-input');
+        const ctx = `[WEB SEARCH RESULTS for "${query}"]:\n\n${summary}\n\nBased on these results, please answer Sir Izac's question.`;
+        if (inp) { inp.value = ctx; sendMessage(); }
+      }
+    } catch(e) { addMsg('jarvis', `⚠ Search requires the local server. Open JARVIS via localhost:7474.`, {name:'JARVIS'}); }
+    return;
+  }
+  // Handle [BROWSE: url]
   const m = text.match(/\[BROWSE:\s*(https?:\/\/[^\]]+)\]/i);
   if (!m) return;
   const url = m[1].trim();
@@ -1855,7 +1873,7 @@ async function checkAndExecuteBrowse(text, msgEl) {
     const ctx = `[BROWSER RESULT from ${url}]:\n${result.slice(0, 2000)}\n\nBased on this content, please answer Sir Izac's question.`;
     if (inp) { inp.value = ctx; sendMessage(); }
   } else {
-    addMsg('jarvis', `⚠️ Browser use requires the local server running on localhost. Start JARVIS via the desktop shortcut to enable this.`, {name:'JARVIS'});
+    addMsg('jarvis', `⚠ Browser use requires the local server. Open JARVIS via localhost:7474.`, {name:'JARVIS'});
   }
 }
 
