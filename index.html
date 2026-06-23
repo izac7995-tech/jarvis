@@ -1279,6 +1279,19 @@ function speakBrowser(text, msgEl) {
 }
 
 function testVoice() {
+  // Test 0: Web Audio API oscillator — no network, no TTS, pure audio output test
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 220;
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+    osc.start(); osc.stop(ctx.currentTime + 1.2);
+    // If you hear a low hum/tone, Chrome audio output works
+  } catch(e) { /* will show in diagnostics below */ }
+
   const log = (msg, col) => {
     let el = document.getElementById('voice-debug');
     if (!el) {
