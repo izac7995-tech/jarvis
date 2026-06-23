@@ -1607,8 +1607,15 @@ async function* streamAI(messages,sysPrompt,signal){
   if(prov.needsKey&&key)hdrs['Authorization']=`Bearer ${key}`;
   if(S.provider==='openrouter'){hdrs['HTTP-Referer']='https://jarvis.local';hdrs['X-Title']='JARVIS';}
   const model=prov.defaultModel;
-  const r=await fetch(`${prov.baseUrl}/chat/completions`,{method:'POST',signal,headers:hdrs,body:JSON.stringify({model,stream:true,messages:[{role:'system',content:sysPrompt},...messages]})});
+  const isOllama=S.provider==='ollama';
+  const r=await fetch(`${prov.baseUrl}/chat/completions`,{method:'POST',signal,headers:hdrs,body:JSON.stringify({model,stream:!isOllama,messages:[{role:'system',content:sysPrompt},...messages]})});
   if(!r.ok){const e=await r.text();yield`⚠ ${prov.name} error ${r.status}: ${e.slice(0,200)}`;return;}
+  if(isOllama){
+    const j=await r.json();
+    const content=j.choices?.[0]?.message?.content||j.message?.content||'';
+    if(content)yield content;
+    return;
+  }
   const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
   while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const l of lines){if(!l.startsWith('data:'))continue;const raw=l.slice(5).trim();if(raw==='[DONE]')return;try{const j=JSON.parse(raw);const d=j.choices?.[0]?.delta?.content;if(d)yield d;}catch{}}}
 }
